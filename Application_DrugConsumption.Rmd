@@ -1,0 +1,184 @@
+---
+output: 
+  pdf_document:
+    citation_package: natbib
+    keep_tex: true
+    fig_caption: true
+    latex_engine: xelatex
+    template: svm-latex-ms.tex
+title: "Application to Drug Consumption data"
+#thanks: "**Corresponding author**: rooijm@fsw.leidenuniv.nl"
+author:
+- name: Mark de Rooij
+  affiliation:  Methodology and Statistics Unit, Leiden University
+- name: Patrick Groenen
+  affiliation: Econometric Institute, Erasmus University
+abstract: "This is a document describing the MLD model and a MM algorithm."
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+geometry: margin=1in
+fontfamily: mathpazo
+fontsize: 12pt
+spacing: double
+bibliography: ~/surfdrive/predictive-psychometrics/paper/predpsycho.bib
+biblio-style: apsr
+endnote: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy = TRUE)
+setwd("~/surfdrive/MLDM/mldm2")
+library(ggplot2)
+library(foreign)
+library(latex2exp)
+```
+
+
+# Introduction
+
+Fehrman E., Muhammad A.K., Mirkes E.M., Egan V., Gorban A.N. (2017) The Five Factor Model of Personality and Evaluation of Drug Consumption Risk. In: Palumbo F., Montanari A., Vichi M. (eds) Data Science. Studies in Classification, Data Analysis, and Knowledge Organization. Springer, Cham
+
+The drug consumption data has records for 1885 respondents. For each respondent 9 attributes are measured: Personality measurements which include NEO-FFI-R (neuroticism, extraversion, openness to experience, agreeableness, and conscientiousness), BIS-11 (impulsivity), and ImpSS (sensation seeking), age, gender. \footnote{Also level of education, ethnicity, and country of origin are available in the original data base.}
+
+In addition, participants were questioned concerning their use of 18 legal and illegal drugs and one fictitious drug (Semeron) which was introduced to identify over-claimers. For each drug patricipants had to indicate whether they never used the drug, used it over a decade ago, in the last decade, in the last year, month, week, or day. In our analysis we coded whether participants used the particular drug in the last year. Furthermore, we focussed on the drugs that had a minimal percentage of 10\% and a maximum of 90\%, which are Amphetamine, Benzodiazepine, Cannabis, Cocaine, Extasy, Ketamine, legal highs consumption, LSD, Methadone, Mushrooms, and Nicotine. 
+
+
+
+# Analysis
+
+```{r}
+setwd("~/surfdrive/MLDM/mldm2")
+source("melodic.R")
+
+drugdat <- read.table('https://archive.ics.uci.edu/ml/machine-learning-databases/00373/drug_consumption.data', sep = ",")
+for (v in 14:32){
+  drugdat[,v] = ifelse(drugdat[,v] == "CL3", 1, ifelse(drugdat[,v] == "CL4", 1, ifelse(drugdat[, v] == "CL5",1, ifelse(drugdat[,v] == "CL6", 1, 0))))
+}
+
+# add variable names
+colnames(drugdat) = c(
+  "id",
+  "age",
+  "gender",
+  "educ",
+  "country",
+  "ethnic",
+  "N",
+  "E",
+  "O",
+  "A",
+  "C",
+  "impulse",
+  "SS",
+  "Alcohol",
+  "Am",
+  "Amyl",
+  "Be",
+  "Caff",
+  "Ca",
+  "Choc",
+  "Co",
+  "Crack",
+  "Ex",
+  "Heroin",
+  "Ke",
+  "Le",
+  "LSD",
+  "Me",
+  "Mu",
+  "Ni",
+  "Semer",
+  "VSA"
+)
+
+X = as.matrix(drugdat[,c(2,3,7:13)])
+Y = as.matrix(drugdat[,14:32])  
+idx = which(colMeans(Y) > 0.1 & colMeans(Y) < 0.9)
+Y = Y[, idx]
+```
+
+The first step in the analysis is to select the dimensionality. We fit models in one till 7 dimensions and compute the AIC statistic for comparison. 
+
+```{r, echo = FALSE}
+out1 = mldm1(X,Y, M = 1)
+out2 = mldm1(X,Y, M = 2)
+out3 = mldm1(X,Y, M = 3)
+out4 = mldm1(X,Y, M = 4)
+out5 = mldm1(X,Y, M = 5)
+out6 = mldm1(X,Y, M = 6)
+out7 = mldm1(X,Y, M = 7)
+AIC = matrix(NA, 7, 5)
+colnames(AIC) = c("Dimensionality", "Deviance", "#param", "AIC", "BIC")
+AIC[, 1] = seq(1,7)
+AIC[1, 2] = out1$QD; AIC[1, 3] = out1$npar; AIC[1, 4] = out1$QD + 2*out1$npar; AIC[1, 5] = out1$QD + log(1885)*out1$npar
+AIC[2, 2] = out2$QD; AIC[2, 3] = out2$npar; AIC[2, 4] = out2$QD + 2*out2$npar; AIC[2, 5] = out2$QD + log(1885)*out2$npar
+AIC[3, 2] = out3$QD; AIC[3, 3] = out3$npar; AIC[3, 4] = out3$QD + 2*out3$npar; AIC[3, 5] = out3$QD + log(1885)*out3$npar
+AIC[4, 2] = out4$QD; AIC[4, 3] = out4$npar; AIC[4, 4] = out4$QD + 2*out4$npar; AIC[4, 5] = out4$QD + log(1885)*out4$npar
+AIC[5, 2] = out5$QD; AIC[5, 3] = out5$npar; AIC[5, 4] = out5$QD + 2*out5$npar; AIC[5, 5] = out5$QD + log(1885)*out5$npar
+AIC[6, 2] = out6$QD; AIC[6, 3] = out6$npar; AIC[6, 4] = out6$QD + 2*out6$npar; AIC[6, 5] = out6$QD + log(1885)*out6$npar
+AIC[7, 2] = out7$QD; AIC[7, 3] = out7$npar; AIC[7, 4] = out7$QD + 2*out7$npar; AIC[7, 5] = out7$QD + log(1885)*out7$npar
+AIC.dim = AIC
+```
+```{r}
+AIC.dim
+```
+
+We can see that either the two- or three dimensional solution is optimal. Further let us check the influence of the predictor variables in the two dimensional solution.
+
+```{r, echo = FALSE}
+out2a = mldm1(X[, -1],Y, M = 2)
+out2b = mldm1(X[, -2],Y, M = 2)
+out2c = mldm1(X[, -3],Y, M = 2)
+out2d = mldm1(X[, -4],Y, M = 2)
+out2e = mldm1(X[, -5],Y, M = 2)
+out2f = mldm1(X[, -6],Y, M = 2)
+out2g = mldm1(X[, -7],Y, M = 2)
+out2h = mldm1(X[, -8],Y, M = 2)
+out2i = mldm1(X[, -9],Y, M = 2)
+
+
+AIC = matrix(NA, 9, 5)
+colnames(AIC) = c("Left Out", "Deviance", "#param", "AIC", "BIC")
+
+AIC[1, 2] = out2a$QD; AIC[1, 3] = out2a$npar; AIC[1, 4] = out2a$QD + 2*out2a$npar; AIC[1, 5] = out2a$QD + log(1885)*out2a$npar
+AIC[2, 2] = out2b$QD; AIC[2, 3] = out2b$npar; AIC[2, 4] = out2b$QD + 2*out2b$npar; AIC[2, 5] = out2b$QD + log(1885)*out2b$npar
+AIC[3, 2] = out2c$QD; AIC[3, 3] = out2c$npar; AIC[3, 4] = out2c$QD + 2*out2c$npar; AIC[3, 5] = out2c$QD + log(1885)*out2c$npar
+AIC[4, 2] = out2d$QD; AIC[4, 3] = out2d$npar; AIC[4, 4] = out2d$QD + 2*out2d$npar; AIC[4, 5] = out2d$QD + log(1885)*out2d$npar
+AIC[5, 2] = out2e$QD; AIC[5, 3] = out2e$npar; AIC[5, 4] = out2e$QD + 2*out2e$npar; AIC[5, 5] = out2e$QD + log(1885)*out2e$npar
+AIC[6, 2] = out2f$QD; AIC[6, 3] = out2f$npar; AIC[6, 4] = out2f$QD + 2*out2f$npar; AIC[6, 5] = out2f$QD + log(1885)*out2f$npar
+AIC[7, 2] = out2g$QD; AIC[7, 3] = out2g$npar; AIC[7, 4] = out2g$QD + 2*out2g$npar; AIC[7, 5] = out2g$QD + log(1885)*out2g$npar
+AIC[8, 2] = out2h$QD; AIC[8, 3] = out2h$npar; AIC[8, 4] = out2h$QD + 2*out2h$npar; AIC[8, 5] = out2h$QD + log(1885)*out2h$npar
+AIC[9, 2] = out2i$QD; AIC[9, 3] = out2i$npar; AIC[9, 4] = out2i$QD + 2*out2i$npar; AIC[9, 5] = out2i$QD + log(1885)*out2i$npar
+AIC[, 1] = seq(1,9)
+AIC.pred = AIC
+```
+
+```{r}
+AIC.pred
+```
+
+# Interpretation
+
+```{r}
+p = plot.mldm(out2h, dec.lines = FALSE)
+p
+ggsave(filename="~/surfdrive/MLDM/mldm2/Figures/drug_mldm.pdf", plot=p, width = 11.7, height = 8.3, units = "in", limitsize = FALSE)
+```
+
+Further let us look at the logistic regression coefficients. Since we standardized the preidtcor variables these are changes in log odds for one standard deviations increases in the predictors.
+
+```{r}
+out2h$LRcoef
+```
+
+We can verify how well each response variable is represented in the low dimensional space. Therefore we define a measure called Quality of Representation, $Q_r$ which is defined by
+$$
+Q_r = (L_{(0,r)} - L_r)/(L_{(0,r)} - L_{lr}), 
+$$
+where $L_{(0,r)}$ is the deviance of the intercept only logistic regression model for response variable $r$, $L_r$ is the part of the loss function for our new model, and $L_{lr}$ is the deviance from the logistic regression with the same predictor variables $\mathbf{X}$. 
+
+```{r}
+mldm.diag(out2h)
+```
+
+We see that most response variables are well represented. The response variable `cocaine' is worst rerpesented with only 89.8\% recovered deviance. 
+
